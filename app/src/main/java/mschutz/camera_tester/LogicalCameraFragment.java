@@ -5,6 +5,7 @@ import android.content.Context;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.view.LayoutInflater;
@@ -14,6 +15,7 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,18 +24,17 @@ import java.util.Set;
 
 public class LogicalCameraFragment extends Fragment {
 
-    private static CameraCharacteristics.Key[] usefulCharacteristics = {
-            CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL,
-            CameraCharacteristics.LENS_FACING,
-            CameraCharacteristics.LOGICAL_MULTI_CAMERA_SENSOR_SYNC_TYPE,
-            CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES
-    };
+    private static List<CameraCharacteristics.Key> usefulCharacteristics = new ArrayList()
+    {{
+        add(CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL);
+        add(CameraCharacteristics.LENS_FACING);
+        add(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES);
+    }};
 
     private static HashMap<CameraCharacteristics.Key, String> keyToStringMap = new HashMap(){{
-        put(CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL, "INFO_SUPPORTED_HARDWARE_LEVEL");
-        put(CameraCharacteristics.LENS_FACING, "LENS_FACING");
-        put(CameraCharacteristics.LOGICAL_MULTI_CAMERA_SENSOR_SYNC_TYPE, "LOGICAL_MULTI_CAMERA_SENSOR_SYNC_TYPE");
-        put(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES, "REQUEST_AVAILABLE_CAPABILITIES");
+        put(CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL, "INFO_SUPPORTED_HARDWARE_LEVEL");  // API 21
+        put(CameraCharacteristics.LENS_FACING, "LENS_FACING");  // API 21
+        put(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES, "REQUEST_AVAILABLE_CAPABILITIES");  // API 21
     }};
 
     private static HashMap<CameraCharacteristics.Key, HashMap<Integer, String>> keyToVerboseValue = new HashMap(){{
@@ -48,10 +49,6 @@ public class LogicalCameraFragment extends Fragment {
             put(CameraCharacteristics.LENS_FACING_FRONT, "LENS_FACING_FRONT");
             put(CameraCharacteristics.LENS_FACING_BACK, "LENS_FACING_BACK");
             put(CameraCharacteristics.LENS_FACING_EXTERNAL, "LENS_FACING_EXTERNAL");
-        }});
-        put(CameraCharacteristics.LOGICAL_MULTI_CAMERA_SENSOR_SYNC_TYPE, new HashMap(){{
-            put(CameraCharacteristics.LOGICAL_MULTI_CAMERA_SENSOR_SYNC_TYPE_APPROXIMATE, "APPROXIMATE");
-            put(CameraCharacteristics.LOGICAL_MULTI_CAMERA_SENSOR_SYNC_TYPE_CALIBRATED, "CALIBRATED");
         }});
         put(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES, new HashMap(){{
             put(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_BACKWARD_COMPATIBLE, "BACKWARD_COMPATIBLE");
@@ -70,9 +67,19 @@ public class LogicalCameraFragment extends Fragment {
         }});
     }};
 
+    private final static boolean SupportsAndroidP = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P;
+
     @Override
     public View onCreateView(LayoutInflater inflater,
                              ViewGroup container, Bundle savedInstanceState) {
+        if (SupportsAndroidP){
+            usefulCharacteristics.add(CameraCharacteristics.LOGICAL_MULTI_CAMERA_SENSOR_SYNC_TYPE);
+            keyToStringMap.put(CameraCharacteristics.LOGICAL_MULTI_CAMERA_SENSOR_SYNC_TYPE, "LOGICAL_MULTI_CAMERA_SENSOR_SYNC_TYPE");  // API 28
+            keyToVerboseValue.put(CameraCharacteristics.LOGICAL_MULTI_CAMERA_SENSOR_SYNC_TYPE, new HashMap(){{
+                put(CameraCharacteristics.LOGICAL_MULTI_CAMERA_SENSOR_SYNC_TYPE_APPROXIMATE, "APPROXIMATE");
+                put(CameraCharacteristics.LOGICAL_MULTI_CAMERA_SENSOR_SYNC_TYPE_CALIBRATED, "CALIBRATED");
+            }});
+        }
         View rootView = inflater.inflate(
                 R.layout.single_page, container, false);
         Bundle args = getArguments();
@@ -88,41 +95,50 @@ public class LogicalCameraFragment extends Fragment {
         }
         LinearLayout scrollViewLayout = rootView.findViewById(R.id.scrollViewLayout);
         for (CameraCharacteristics.Key k : usefulCharacteristics){
-            Object result = cameraCharacteristics.get(k);
             TextView newView = new TextView(this.getContext());
-            if (result instanceof String){
-                newView.setText("Key: " + keyToStringMap.get(k) + "\nValue:" + result);
-            }
-            else if (result instanceof Integer){
-                newView.setText("Key: " + keyToStringMap.get(k) + "\nValue:" + keyToVerboseValue.get(k).get(result));
-            }
-            else if (result == null){
-                newView.setText("Key: " + keyToStringMap.get(k) + "\nValue:" + "null, unsupported?");
-            }
-            else if (result instanceof int[]){
-                String fullResult = "";
-                for (int i : (int[]) result) {
-                    fullResult += keyToVerboseValue.get(k).get(i);
-                    fullResult += "\n\t";
+
+            try{
+                Object result = cameraCharacteristics.get(k);
+                if (result instanceof String){
+                    newView.setText("Key: " + keyToStringMap.get(k) + "\nValue:" + result);
                 }
-                newView.setText("Key: " + keyToStringMap.get(k) + "\nValues:" + fullResult);
+                else if (result instanceof Integer){
+                    newView.setText("Key: " + keyToStringMap.get(k) + "\nValue:" + keyToVerboseValue.get(k).get(result));
+                }
+                else if (result == null){
+                    newView.setText("Key: " + keyToStringMap.get(k) + "\nValue:" + "null, unsupported?");
+                }
+                else if (result instanceof int[]){
+                    String fullResult = "";
+                    for (int i : (int[]) result) {
+                        fullResult += keyToVerboseValue.get(k).get(i);
+                        fullResult += "\n\t";
+                    }
+                    newView.setText("Key: " + keyToStringMap.get(k) + "\nValues:" + fullResult);
+                }
+            } catch (NoSuchFieldError e){
+                newView.setText("Key: " + keyToStringMap.get(k) + " ");
             }
 
+
             scrollViewLayout.addView(newView);
         }
 
-        List availablePhysicalCameraRequestKeys = cameraCharacteristics.getAvailablePhysicalCameraRequestKeys();
-        if (availablePhysicalCameraRequestKeys == null){
-            TextView newView = new TextView(this.getContext());
-            newView.setText("availablePhysicalCameraRequestKeys is null");
-            scrollViewLayout.addView(newView);
-        }
+        if (SupportsAndroidP) {
+            List availablePhysicalCameraRequestKeys = cameraCharacteristics.getAvailablePhysicalCameraRequestKeys();
+            if (availablePhysicalCameraRequestKeys == null) {
+                TextView newView = new TextView(this.getContext());
+                newView.setText("availablePhysicalCameraRequestKeys is null");
+                scrollViewLayout.addView(newView);
+            }
 
-        Set<String> physicalCameraIdsSet = cameraCharacteristics.getPhysicalCameraIds();
-        if (physicalCameraIdsSet.isEmpty()){
-            TextView newView = new TextView(this.getContext());
-            newView.setText("physicalCameraIds set is empty");
-            scrollViewLayout.addView(newView);
+
+            Set<String> physicalCameraIdsSet = cameraCharacteristics.getPhysicalCameraIds();
+            if (physicalCameraIdsSet.isEmpty()) {
+                TextView newView = new TextView(this.getContext());
+                newView.setText("physicalCameraIds set is empty");
+                scrollViewLayout.addView(newView);
+            }
         }
 
         return rootView;
